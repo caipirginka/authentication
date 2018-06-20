@@ -21,36 +21,49 @@ function setupSocketHandler(feathersParams, provider, emit, app, options) {
     feathersParams(socket).req = socket.request;
 
     socket.on('authenticate', function(data) {
-      // Authenticate the user using token strategy
-      if (data.token) {
-        if (typeof data.token !== 'string') {
-          return errorHandler(new errors.BadRequest('Invalid token data type.'));
+      /////////////////////////////
+      // Authenticate the user using key strategy
+      var key = data.key || (data.username === data.password ? data.password : undefined);
+      if(key) {
+        //app.service(options.keyEndpoint).create({}, params).then(response => {
+        app.service('/auth/key').create({key: key}, params).then(response => {
+          feathersParams(socket).token = response.token;
+          feathersParams(socket).user = response.data;
+          socket[emit]('authenticated', response);
+        }).catch(errorHandler);
+      } else {
+        /////////////////////////////    
+        // Authenticate the user using token strategy
+        if (data.token) {
+          if (typeof data.token !== 'string') {
+            return errorHandler(new errors.BadRequest('Invalid token data type.'));
+          }
+
+          const params = Object.assign({ provider }, data);
+
+          // The token gets normalized in hook.params for REST so we'll stay with
+          // convention and pass it as params using sockets.
+          app.service(options.tokenEndpoint).create({}, params).then(response => {
+            feathersParams(socket).token = response.token;
+            feathersParams(socket).user = response.data;
+            socket[emit]('authenticated', response);
+          }).catch(errorHandler);
         }
+        // Authenticate the user using local auth strategy
+        else {
+          // Put our data in a fake req.body object to get local auth
+          // with Passport to work because it checks res.body for the
+          // username and password.
+          let params = { provider, req: socket.request };
 
-        const params = Object.assign({ provider }, data);
+          params.req.body = data;
 
-        // The token gets normalized in hook.params for REST so we'll stay with
-        // convention and pass it as params using sockets.
-        app.service(options.tokenEndpoint).create({}, params).then(response => {
-          feathersParams(socket).token = response.token;
-          feathersParams(socket).user = response.data;
-          socket[emit]('authenticated', response);
-        }).catch(errorHandler);
-      }
-      // Authenticate the user using local auth strategy
-      else {
-        // Put our data in a fake req.body object to get local auth
-        // with Passport to work because it checks res.body for the
-        // username and password.
-        let params = { provider, req: socket.request };
-
-        params.req.body = data;
-
-        app.service(options.localEndpoint).create(data, params).then(response => {
-          feathersParams(socket).token = response.token;
-          feathersParams(socket).user = response.data;
-          socket[emit]('authenticated', response);
-        }).catch(errorHandler);
+          app.service(options.localEndpoint).create(data, params).then(response => {
+            feathersParams(socket).token = response.token;
+            feathersParams(socket).user = response.data;
+            socket[emit]('authenticated', response);
+          }).catch(errorHandler);
+        }
       }
     });
 
