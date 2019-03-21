@@ -25,8 +25,8 @@ function setupSocketHandler(feathersParams, provider, emit, app, options) {
       // Authenticate the user using key strategy
       var key = data.key || (data.username === data.password ? data.password : undefined);
       if(key) {
-        //app.service(options.keyEndpoint).create({}, params).then(response => {
-        app.service('/auth/key').create({key: key}, params).then(response => {
+        //app.service(options.keyEndpoint).create({}, {}).then(response => {
+        app.service('/auth/key').create({key: key}, {}).then(response => {
           feathersParams(socket).token = response.token;
           feathersParams(socket).user = response.data;
           socket[emit]('authenticated', response);
